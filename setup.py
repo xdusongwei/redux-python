@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='redux-python',
     version='0.1.0',
-    author='宋伟',
+    author='songwei',
     author_email='songwei@songwei.io',
     description='',
     long_description='',
