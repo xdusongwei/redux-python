@@ -3,24 +3,24 @@ from .typing import *
 import asyncio
 from .error import *
 from .option import Option
-from .action import Action
 from .recycle_option import *
 from .medium import MediumBase
-from .combine_message import CombineMessage
+from .combine_message import CombineMessage, AnyMessage
 
 
-class ReducerDetail:
+'''class ReducerDetail:
     def __init__(self):
         self.locker = asyncio.Lock()
         self.last_idle_key = None
         self.is_new = True
         self.subscribe_set = set()
-        self.listener_dict = set()
+        self.listener_dict = set()'''
 
 
 class Reducer:
     key_prefix = r"noname:"
     recycle_option = NeverRecycleOption()
+    subscribe_action_set = set()
 
     def __repr__(self):
         return "<Reducer: {}>".format(self.key)
@@ -51,7 +51,16 @@ class Reducer:
             self.enable_call_shutdown = False
         else:
             self.enable_call_shutdown = True
+        if self.enable_subscribe.__code__ is Reducer.enable_subscribe.__code__:
+            self.enable_call_subscribe = False
+        else:
+            self.enable_call_subscribe = True
+        if self.enable_unsubscribe.__code__ is Reducer.enable_unsubscribe.__code__:
+            self.enable_call_unsubscribe = False
+        else:
+            self.enable_call_unsubscribe = True
         self.subscribe_set = set()
+        self.unsubscribe_set = set()
         self.listener_dict = dict()
         self.combine_message_list = []
 
@@ -63,10 +72,10 @@ class Reducer:
             self.node_id = key.replace(self.key_prefix, "", 1)
         return True
 
-    async def action_received(self, action: Action):
+    async def action_received(self, action):
         raise NotImplementedError
 
-    async def reduce(self, action: Action) -> Dict[KEY, Any]:
+    async def reduce(self, action) -> Dict[KEY, Any]:
         if self.enable_call_action_received:
             await self.action_received(action)
         changed_state = {}
@@ -84,7 +93,7 @@ class Reducer:
             await self.reduce_finish(action, changed_state)
         return changed_state
 
-    async def reduce_finish(self, action: Action, changed_state: Dict[KEY, Any]):
+    async def reduce_finish(self, action, changed_state: Dict[KEY, Any]):
         raise NotImplementedError
 
     async def shutdown(self):
@@ -106,6 +115,12 @@ class Reducer:
         if not isinstance(medium, MediumBase):
             return Option(TypeError())
         return await medium.send(self.key, key, action)
+
+    async def enable_subscribe(self, action) -> Option:
+        raise NotImplementedError
+
+    async def enable_unsubscribe(self, action) -> Option:
+        raise NotImplementedError
 
     async def subscribe(self, medium: Optional[MediumBase], key: KEY) -> Option:
         pass
@@ -134,11 +149,14 @@ class Reducer:
     def ensure_state(self):
         pass
 
-    def combine_message(self, message_type_list, combine_message, error_message, timeout=1.0, keep_origin=False):
+    def combine_message(self, message_type_list: Union[KEY, List[KEY]], combine_message, timeout_message, timeout=1.0,
+                        keep_origin=False):
+        if not message_type_list:
+            return
         cb = CombineMessage()
-        cb.message_type_list = message_type_list
+        cb.message_type_list = message_type_list if isinstance(message_type_list, list) else [message_type_list]
         cb.combine_message = combine_message
-        cb.error_message = error_message
+        cb.timeout_message = timeout_message
         cb.timeout = timeout
         cb.keep_origin = keep_origin
         cb.node_key = self.key
@@ -146,5 +164,17 @@ class Reducer:
         self.combine_message_list.append(cb)
         cb.active()
 
+    def any_message(self, message_type_list: Union[KEY, List[KEY]], timeout_message, timeout=1.0):
+        if not message_type_list:
+            return
+        cb = AnyMessage()
+        cb.message_type_list = message_type_list if isinstance(message_type_list, list) else [message_type_list]
+        cb.timeout_message = timeout_message
+        cb.timeout = timeout
+        cb.node_key = self.key
+        cb.store = self.store
+        self.combine_message_list.append(cb)
+        cb.active()
 
-__all__ = ["Reducer", "ReducerDetail"]
+
+__all__ = ["Reducer", ]

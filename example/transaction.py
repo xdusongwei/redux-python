@@ -42,7 +42,7 @@ DATABASE = {
 }
 
 
-@redux.behavior("entry:public:", redux.SubscribeRecycleOption(), r"/events")
+@redux.behavior("entry:public:", redux.SubscribeRecycleOption(), url_pattern=r"/events")
 class PublicService(redux.PublicEntryReducer):
     @staticmethod
     async def find_node_id(key_prefix, path, query):

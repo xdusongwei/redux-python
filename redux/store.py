@@ -10,7 +10,7 @@ from .action import Action
 from .recycle_option import *
 from .listener import Listener, ListenerStateWrapper
 from .reducer import Reducer
-from .combine_message import CombineMessage
+from .combine_message import CombineMessage, AnyMessage
 
 
 class Store:
@@ -141,7 +141,22 @@ class Store:
                 self.remove_idle_key(reducer)
                 self.set_idle_key(reducer)
             if await self._combine_block(reducer, action):
-                await self._dispatch(reducer, action)
+                if action.type in reducer.subscribe_action_set:
+                    if not reducer.enable_call_subscribe:
+                        pass # something wrong
+                    else:
+                        listener_opt = await reducer.enable_subscribe(action)
+                        if listener_opt.is_some:
+                            await self.subscribe(key, listener_opt.unwrap())
+                elif action.type in reducer.unsubscribe_action_set:
+                    if not reducer.enable_call_unsubscribe:
+                        pass
+                    else:
+                        listener_opt = await reducer.enable_unsubscribe(action)
+                        if listener_opt.is_some:
+                            self.unsubscribe(key, listener_opt.unwrap())
+                else:
+                    await self._dispatch(reducer, action)
             if reducer.is_new and isinstance(reducer.recycle_option, IdleTimeoutRecycleOption) and not reducer.recycle_option.timeout:
                 self.pop_reducer_by_key(key)
             reducer.is_new = False
@@ -155,10 +170,14 @@ class Store:
         for cb in list(reducer.combine_message_list):
             combine_message: CombineMessage = cb
             if action_type in combine_message.message_type_list:
-                combine_message.message_type_list.remove(action_type)
-                if not combine_message.message_type_list and not combine_message.future.done():
+                if isinstance(combine_message, AnyMessage):
                     reducer.combine_message_list.remove(combine_message)
                     combine_message.future.set_result(True)
+                else:
+                    combine_message.message_type_list.remove(action_type)
+                    if not combine_message.message_type_list and not combine_message.future.done():
+                        reducer.combine_message_list.remove(combine_message)
+                        combine_message.future.set_result(True)
                 return combine_message.keep_origin
         return True
 
@@ -192,13 +211,15 @@ class Store:
         listener.is_binding = True
         listener.store = self
         listener.key = key
+        call_no_op = key not in self
         reducer_opt = await self.get_or_create_cell(key, reducer_type)
         if not reducer_opt.is_some:
             return Option.none()
         reducer = reducer_opt.unwrap()
         self.remove_idle_key(reducer)
-        await self._dispatch(reducer, Action.no_op_command())
-        reducer.is_new = False
+        if call_no_op:
+            await self._dispatch(reducer, Action.no_op_command())
+            reducer.is_new = False
         state = self[key]
         if state:
             await listener_wrapper.call_state_changed(state, state)

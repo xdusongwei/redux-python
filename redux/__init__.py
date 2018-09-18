@@ -6,7 +6,8 @@ from .listener import Listener
 from .recycle_option import IdleTimeoutRecycleOption, NeverRecycleOption, SubscribeRecycleOption
 from .reducer import Reducer
 from .store import Store
-from .design import PublicEntryReducer, InternalEntryReducer, ExecutorReducer, GeneralReducer, reducer_behavior
+from .design import PublicEntryReducer, InternalEntryReducer, ExecutorReducer, GeneralReducer, \
+    reducer_behavior, action_info
 
 
 behavior = reducer_behavior

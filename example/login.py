@@ -23,7 +23,7 @@ ExecutorReducer 处理完 VERIFY_LOGIN Action 之后, 可以通过 Action 中的
 '''
 
 
-@redux.behavior(r"entry:session:", redux.SubscribeRecycleOption(), r"/login/entry/(.+)")
+@redux.behavior(r"entry:session:", redux.SubscribeRecycleOption(), url_pattern=r"/login/entry/(.+)")
 class LoginReducer(redux.PublicEntryReducer):
     def __init__(self):
         mapping = {

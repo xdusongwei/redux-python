@@ -13,6 +13,9 @@ class Action:
     def __eq__(self, other):
         if isinstance(other, str):
             return self.type == other
+        elif isinstance(other, type):
+            other_type = getattr(other, "TYPE", None)
+            return self.type == other_type
         else:
             return super(Action, self).__eq__(other)
 

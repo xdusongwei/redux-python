@@ -20,7 +20,7 @@ from datetime import datetime
 '''
 
 
-@redux.behavior("entry:session:", redux.SubscribeRecycleOption(), "/tick/entry/(.+)")
+@redux.behavior("entry:session:", redux.SubscribeRecycleOption(), url_pattern="/tick/entry/(.+)")
 class TickReducer(redux.PublicEntryReducer):
     @staticmethod
     async def find_node_id(key_prefix, path, query):

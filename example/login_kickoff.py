@@ -28,10 +28,11 @@ InternalEntryReducer 再去将 Action 交给 GeneralReducer 处理
 '''
 
 
-@redux.behavior(r"entry:session:", redux.SubscribeRecycleOption(), r"/login/entry/(.+)")
+@redux.behavior(r"entry:session:", redux.SubscribeRecycleOption(), url_pattern=r"/login/entry/(.+)")
 class PublicService(redux.PublicEntryReducer):
     def __init__(self):
         super(PublicService, self).__init__()
+        self.user = None
 
     @staticmethod
     async def find_node_id(key_prefix, path, query):
@@ -55,55 +56,89 @@ class PublicService(redux.PublicEntryReducer):
                 await self.send(action, redux.LocalMedium(self.store), LoginService, token)
         if isinstance(action.medium, redux.LocalMedium):
             await self.response(action, self.entry_medium, None)
+        if action == "ACCESS_LOGIN":
+            self.user = action.arguments["token"]
+
+    async def shutdown(self):
+        if not self.user:
+            return
+        action = redux.Action("LEAVE")
+        await self.send(action, redux.LocalMedium(self.store), LoginService, self.user)
 
 
-@redux.behavior(r"entry:user:", redux.IdleTimeoutRecycleOption(3))
+class Session:
+    def __init__(self):
+        self.platform = None
+        self.user = None
+        self.listener = None
+        self.medium = None
+        self.source_key = None
+
+
+class SilenceListener(redux.Listener):
+    async def on_changed(self, changed_key: List[str], state: Dict[str, Any]):
+        pass
+
+
+@redux.behavior(r"entry:user:", redux.IdleTimeoutRecycleOption(3), {"LOGIN"}, {"LEAVE"})
 class LoginService(redux.InternalEntryReducer):
     PC_PLATFORM = {"Windows", "MacOS"}
     MOBILE_PLATFORM = {"Android", "iOS"}
 
     def __init__(self):
         super(LoginService, self).__init__()
-        self.login_list = []
+        self.sessions: Dict[str, Session] = dict()
 
-    @property
-    def login_list(self) -> List[redux.Action]:
-        return self.get_state().get("_login_list", [])
+    async def enable_subscribe(self, action):
+        platform = action.arguments.get("platform")
+        user = action.arguments.get("user_name")
+        if platform in LoginService.PC_PLATFORM:
+            if any([session for session in self.sessions.values() if
+                    session.platform in LoginService.PC_PLATFORM]):
+                await self.response(redux.Action("DENIED_LOGIN"), action.medium, action.source_key)
+            else:
+                listener = SilenceListener()
+                session = Session()
+                session.platform = platform
+                session.user = user
+                session.listener = listener
+                session.medium = action.medium
+                session.source_key = action.source_key
+                self.sessions[action.source_key] = session
+                await self.response(redux.Action("ACCESS_LOGIN", token=user), action.medium, action.source_key)
+                return redux.Option(listener)
+        if platform in LoginService.MOBILE_PLATFORM:
+            new_sessions = dict()
+            for key, session in self.sessions.items():
+                if session.platform in LoginService.MOBILE_PLATFORM:
+                    await self.response(redux.Action("DENIED_LOGIN"), session.medium, session.source_key)
+                else:
+                    new_sessions[key] = session
+            self.sessions = new_sessions
+            listener = SilenceListener()
+            session = Session()
+            session.platform = platform
+            session.user = user
+            session.listener = listener
+            session.medium = action.medium
+            session.source_key = action.source_key
+            self.sessions[action.source_key] = session
+            await self.response(redux.Action("ACCESS_LOGIN", token=user), action.medium, action.source_key)
+        return redux.Option.none()
 
-    @login_list.setter
-    def login_list(self, v):
-        self.get_state()["_login_list"] = v
+    async def enable_unsubscribe(self, action):
+        if action.source_key and action.source_key in self.sessions:
+            return redux.Option(self.sessions.pop(action.source_key).listener)
+        return redux.Option.none()
 
     async def action_received(self, action: redux.Action):
-        if action == "LOGIN" and action.medium and action.source_key:
-            platform = action.arguments.get("platform")
-            user = action.arguments.get("user_name")
-            if platform in LoginService.PC_PLATFORM:
-                if any([session for session in self.login_list if session.arguments["platform"] in LoginService.PC_PLATFORM]):
-                    await self.response(redux.Action("DENIED_LOGIN"), action.medium, action.source_key)
-                else:
-                    login_list = self.login_list
-                    login_list.append(action)
-                    self.login_list = login_list
-                    await self.response(redux.Action("ACCESS_LOGIN", token=user), action.medium, action.source_key)
-            if platform in LoginService.MOBILE_PLATFORM:
-                new_login_list = []
-                for session in self.login_list.copy():
-                    if session.arguments["platform"] in LoginService.MOBILE_PLATFORM:
-                        await self.response(redux.Action("DENIED_LOGIN"), session.medium, session.source_key)
-                    else:
-                        new_login_list.append(session)
-                new_login_list.append(action)
-                self.login_list = new_login_list
-                await self.response(redux.Action("ACCESS_LOGIN", token=user), action.medium, action.source_key)
-
         if action == "SHOW_POINTS":
             token = action.arguments.get("token", None)
             user = token
             await self.send(action, redux.LocalMedium(self.store), UserService, user)
 
         if action == "POINTS":
-            for session in self.login_list:
+            for session in self.sessions.values():
                 await self.response(action, session.medium, session.source_key)
 
 
@@ -169,6 +204,8 @@ async def work():
         "token": "kenny",
     }
     await client_socket.send(json.dumps(point_action))
+    await asyncio.sleep(0.5)
+    await client_socket.close()
     await asyncio.sleep(0.5)
 
 

@@ -110,3 +110,4 @@ venv.bak/
 
 debug*.py
 \.DS_Store
+.directory

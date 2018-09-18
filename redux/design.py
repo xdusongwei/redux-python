@@ -20,6 +20,7 @@ from typing import *
 from .recycle_option import *
 from .medium import MediumBase
 from .reducer import Reducer
+from .action import Action
 
 
 class ReducerNode(Reducer):
@@ -77,15 +78,30 @@ class ExecutorReducer(ReducerNode):
 def reducer_behavior(
         key_prefix,
         recycle_option: RecycleOption=NeverRecycleOption(),
+        subscribe_types=None,
+        unsubscribe_types=None,
         url_pattern=None,
 ):
     def wrap(cls):
         if not issubclass(cls, Reducer):
             raise TypeError
+        setattr(cls, "subscribe_action_set", subscribe_types or set())
+        setattr(cls, "unsubscribe_action_set", unsubscribe_types or set())
         setattr(cls, "key_prefix", key_prefix)
         if recycle_option is not None:
             setattr(cls, "recycle_option", recycle_option)
         if issubclass(cls, PublicEntryReducer):
             setattr(cls, "url_pattern", url_pattern)
+        return cls
+    return wrap
+
+
+def action_info(action_type):
+    def wrap(cls):
+        if not issubclass(cls, Action):
+            raise TypeError
+        if not isinstance(action_type, str):
+            raise TypeError
+        setattr(cls, "TYPE", action_type)
         return cls
     return wrap
