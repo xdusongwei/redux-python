@@ -9,7 +9,6 @@ from .option import Option
 from .action import Action
 from .recycle_option import *
 from .listener import Listener, ListenerStateWrapper
-from .reducer import Reducer
 from .combine_message import CombineMessage, AnyMessage
 
 
@@ -17,7 +16,7 @@ class Store:
     def __repr__(self):
         return f"<Store Size: {len(self._reducer_set)}>"
 
-    def __init__(self, reducer_list: List[Type[Reducer]]=None, init_full_state=True, cleaner_period=1.0):
+    def __init__(self, reducer_list: List[Type]=None, init_full_state=True, cleaner_period=1.0):
         self._reducer_list = set(reducer_list or [])
         self._reducer_set = dict()
         self._observer_list = defaultdict(dict)
@@ -38,10 +37,10 @@ class Store:
     def __contains__(self, item):
         return item in self._reducer_set
 
-    def insert_reducer_type(self, reducer: Type[Reducer]):
+    def insert_reducer_type(self, reducer: Type):
         self._reducer_list.add(reducer)
 
-    def remove_reducer_type(self, reducer: Type[Reducer]):
+    def remove_reducer_type(self, reducer: Type):
         if reducer in self._reducer_list:
             self._reducer_list.remove(reducer)
 
@@ -54,21 +53,21 @@ class Store:
                     return Option(reducer)
         return Option.none()
 
-    def find_reducer_list_by_type(self, reducer_type: Type) -> List[Reducer]:
+    def find_reducer_list_by_type(self, reducer_type: Type) -> List:
         result = []
         for reducer in self._reducer_set.values():
             if type(reducer) == reducer_type:
                 result.append(reducer)
         return result
 
-    def set_idle_key(self, reducer: Reducer):
+    def set_idle_key(self, reducer):
         if isinstance(reducer.recycle_option, IdleTimeoutRecycleOption):
             key = reducer.recycle_option.create_key(reducer)
             reducer.last_idle_key = key
             self._idle_set.add(key)
             self.try_start_idle_cleaner()
 
-    def remove_idle_key(self, reducer: Reducer):
+    def remove_idle_key(self, reducer):
         if isinstance(reducer.recycle_option, IdleTimeoutRecycleOption):
             if reducer.last_idle_key in self._idle_set:
                 self._idle_set.remove(reducer.last_idle_key)
@@ -82,7 +81,7 @@ class Store:
         if key not in self._reducer_set:
             if reducer_type is None:
                 return Option.none()
-            reducer: Reducer = reducer_type()
+            reducer = reducer_type()
             try:
                 await self._initialize_lock.acquire()
                 reducer.store = self
@@ -109,11 +108,12 @@ class Store:
             reducer.listener_dict.clear()
         if reducer.enable_call_shutdown:
             asyncio.ensure_future(reducer.shutdown())
+        reducer.get_state().clear()
 
     def enable_create_reducer(self, reducer_type):
         return True #isinstance(reducer_type.recycle_option, UnsubscribeRecycleOption)
 
-    def enable_set_up_idle_key(self, reducer_type: Type[Reducer], action):
+    def enable_set_up_idle_key(self, reducer_type: Type, action):
         option = reducer_type.recycle_option
         return isinstance(option, IdleTimeoutRecycleOption) and option.timeout and not action.soft
 
@@ -181,7 +181,7 @@ class Store:
                 return combine_message.keep_origin
         return True
 
-    async def _dispatch(self, reducer: Reducer, action: Action):
+    async def _dispatch(self, reducer, action: Action):
         try:
             key = reducer.key
             await reducer.locker.acquire()

@@ -12,16 +12,7 @@ from ..option import Option
 from ..action import Action
 from ..listener import Listener
 from ..store import Store
-from ..design import PublicEntryReducer
-
-
-class EntryMedium(MediumBase):
-    def __init__(self, manager, socket):
-        self.manager = manager
-        self.socket = socket
-
-    async def send(self, current_key: KEY, key: KEY, action: Action):
-        await self.manager.send_data(self.socket, action.to_data(json.dumps))
+from ..design import PublicEntryReducer, EntryMedium
 
 
 def singleton(cls, *args, **kw):
@@ -67,7 +58,7 @@ class EntryListener(Listener):
         self.socket = socket
 
     async def on_changed(self, changed_key: List[str], state: Dict[str, Any]):
-        await self.manager.send_data(self.socket, json.dumps({}))
+        return
 
 
 @singleton
@@ -189,12 +180,6 @@ class RemoteManager:
             if message_type == "ACTION":
                 target_key, action = MediumBase.from_message(RemoteMedium(connection_name, websocket), info).unwrap()
                 asyncio.ensure_future(store.dispatch(target_key, action))
-            elif message_type == "SUBSCRIBE":
-                pass
-            elif message_type == "UNSUBSCRIBE":
-                pass
-            elif message_type == "STATE":
-                pass
             elif message_type == "PICKACK":
                 message_opt = MediumBase.from_pick_ack_message(info)
                 target_key, state = message_opt.unwrap()
@@ -242,10 +227,6 @@ class RemoteManager:
                 message_opt = MediumBase.from_message(RemoteMedium(detail.url, detail.socket), info)
                 target_key, action = message_opt.unwrap()
                 asyncio.ensure_future(store.dispatch(target_key, action))
-            elif message_type == "UNSUBSCRIBE":
-                pass
-            elif message_type == "STATE":
-                pass
             elif message_type == "PICKACK":
                 message_opt = MediumBase.from_pick_ack_message(info)
                 target_key, state = message_opt.unwrap()

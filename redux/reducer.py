@@ -99,7 +99,7 @@ class Reducer:
     async def shutdown(self):
         return Option.none()
 
-    def get_state(self):
+    def get_state(self) -> Dict[KEY, Any]:
         return self._state
 
     async def get_remote_state(self, source: MediumBase, key: KEY, fields=None) -> Option:

@@ -12,6 +12,11 @@ class Listener:
         raise NotImplementedError
 
 
+class SilenceListener(Listener):
+    async def on_changed(self, changed_key: List[str], state: Dict[str, Any]):
+        return
+
+
 class ListenerStateWrapper:
     def __init__(self, listener: Listener, initialize_full_state=True):
         self.is_synced = not initialize_full_state
@@ -25,4 +30,4 @@ class ListenerStateWrapper:
             await self.listener.on_changed([key for key in state.keys() if not key.startswith("__")], state)
 
 
-__all__ = ["Listener", "ListenerStateWrapper", ]
+__all__ = ["Listener", "SilenceListener", "ListenerStateWrapper", ]

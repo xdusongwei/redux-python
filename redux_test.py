@@ -250,6 +250,12 @@ def test_idle():
     asyncio.get_event_loop().run_until_complete(idle())
 
 
+@redux.action_info("TYPE_ACTION")
+class TypeAction(redux.Action):
+    def __init__(self, **kwargs):
+        super(TypeAction, self).__init__(self.TYPE, **kwargs)
+
+
 def test_action():
     action = redux.Action("one")
     assert action == "one"
@@ -257,3 +263,7 @@ def test_action():
     assert action.type == "one"
     assert action.type == action.type
     assert action in ["three", "two", "one"]
+    assert action != TypeAction
+    action = redux.Action("TYPE_ACTION")
+    assert action == TypeAction
+

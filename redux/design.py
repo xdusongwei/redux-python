@@ -17,10 +17,20 @@ ensure_state
 '''
 
 from typing import *
+import json
 from .recycle_option import *
-from .medium import MediumBase
 from .reducer import Reducer
 from .action import Action
+from .medium import MediumBase
+
+
+class EntryMedium(MediumBase):
+    def __init__(self, manager, socket):
+        self.manager = manager
+        self.socket = socket
+
+    async def send(self, current_key, key, action: Action):
+        await self.manager.send_data(self.socket, action.to_data(json.dumps))
 
 
 class ReducerNode(Reducer):
@@ -58,6 +68,18 @@ class PublicEntryReducer(ReducerNode):
     @staticmethod
     async def find_node_id(key_prefix, path, query):
         raise NotImplementedError
+
+    async def action_received(self, action):
+        if isinstance(action.medium, EntryMedium):
+            await self.entry_action_received(action)
+        else:
+            await self.internal_action_received(action)
+
+    async def entry_action_received(self, action):
+        return
+
+    async def internal_action_received(self, action):
+        return
 
 
 class InternalEntryReducer(ReducerNode):
